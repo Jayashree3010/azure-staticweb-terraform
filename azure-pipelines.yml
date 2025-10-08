@@ -1,43 +1,49 @@
 trigger:
-- main       # pipeline runs whenever code is pushed to the main branch
+- main
 
 pool:
   vmImage: 'ubuntu-latest'
 
+variables:
+  AZURE_SERVICE_CONNECTION: 'sc-azure'
+
 steps:
-# Step 1: Install Terraform
-- task: TerraformInstaller@1
+# Step 1: Login to Azure using Service Connection
+- task: AzureCLI@2
+  displayName: 'Azure Login'
   inputs:
-    terraformVersion: '1.5.7'
+    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: |
+      echo "Logged in to Azure"
 
-# Step 2: Initialize Terraform
-- task: TerraformTaskV4@4
+# Step 2: Install Terraform
+- script: |
+    wget https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+    unzip terraform_1.5.7_linux_amd64.zip
+    sudo mv terraform /usr/local/bin/
+    terraform -version
+  displayName: 'Install Terraform'
+
+# Step 3: Initialize Terraform
+- script: |
+    cd terraform
+    terraform init \
+      -backend-config="resource_group_name=rg-tfstate" \
+      -backend-config="storage_account_name=tfstateuniquestring" \
+      -backend-config="container_name=tfstate" \
+      -backend-config="key=terraform.tfstate"
   displayName: 'Terraform Init'
-  inputs:
-    provider: 'azurerm'
-    command: 'init'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-    backendServiceArm: 'sc-azure'         # Azure Service Connection
-    backendAzureRmResourceGroupName: 'rg-tfstate'
-    backendAzureRmStorageAccountName: 'tfstateuniquestring'
-    backendAzureRmContainerName: 'tfstate'
-    backendAzureRmKey: 'terraform.tfstate'
 
-# Step 3: Plan Terraform deployment
-- task: TerraformTaskV4@4
+# Step 4: Plan Terraform deployment
+- script: |
+    cd terraform
+    terraform plan -out=tfplan
   displayName: 'Terraform Plan'
-  inputs:
-    provider: 'azurerm'
-    command: 'plan'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-    environmentServiceNameAzureRM: 'sc-azure'
 
-# Step 4: Apply Terraform changes
-- task: TerraformTaskV4@4
+# Step 5: Apply Terraform changes
+- script: |
+    cd terraform
+    terraform apply -auto-approve tfplan
   displayName: 'Terraform Apply'
-  inputs:
-    provider: 'azurerm'
-    command: 'apply'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-    environmentServiceNameAzureRM: 'sc-azure'
-    args: '-auto-approve'
