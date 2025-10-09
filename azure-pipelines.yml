@@ -2,7 +2,7 @@ trigger:
 - main
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: LocalAgentPool
 
 variables:
   AZURE_SERVICE_CONNECTION: 'sc-azure'
